@@ -21,6 +21,9 @@ struct process
   TAILQ_ENTRY(process) pointers;
 
   /* Additional fields here */
+  u32 remaining_time;
+  u32 response_time;
+  u32 waiting_time; 
   /* End of "Additional fields here" */
 };
 
@@ -160,6 +163,79 @@ int main(int argc, char *argv[])
   u32 total_response_time = 0;
 
   /* Your code here */
+  // initialize the remaining tiem of each process
+  struct process *p;
+  for (u32 i = 0; i < size; i++) {
+    p = &data[i];
+    p->response_time = -69;
+    p->remaining_time = p->burst_time;
+  }
+  
+  u32 t = 0;
+  u32 quantum = quantum_length;
+  bool finished = false;
+  // each iteration is 1 unit of time
+  while (!finished) {
+    // "schedule our process if it arrives"
+    for (u32 i = 0; i < size; i++){
+      p = &data[i];
+      if (p->arrival_time == 0 && t == 0) {
+        TAILQ_INSERT_TAIL(&list, p, pointers);
+      } else if (p->arrival_time == t + 1) {
+        TAILQ_INSERT_TAIL(&list, p, pointers);
+      }
+    }
+
+    // figure out the process to run
+    if (!TAILQ_EMPTY(&list)) {
+      p = TAILQ_FIRST(&list);
+      
+      // calculate response time: first time it's accessed to run
+      // current time - the time the process arrived
+      if (p->response_time == -69) {
+        p->response_time = t - p->arrival_time;
+        // printf("Running %d, response time %d\n", p->pid, p->response_time);
+      }
+      // before end of time slice, check if remaining time became 0
+      p->remaining_time -= 1;
+      quantum--;
+      if (p->remaining_time == 0) {
+        p->waiting_time = t - p->arrival_time - p->burst_time + 1;
+        TAILQ_REMOVE(&list, p, pointers);
+        quantum = quantum_length;
+      }
+    }
+    
+
+    // "check if we still have processes to run"
+    finished = true;
+    for (u32 i = 0; i < size; i++) {
+      p = &data[i];
+      if (p->remaining_time != 0) {
+        finished = false;
+        break;
+      }
+    }
+    // if it's at the end of the time slice
+    if (quantum == 0) {
+      p = TAILQ_FIRST(&list);
+      // move to next process
+      TAILQ_REMOVE(&list, p, pointers);
+      TAILQ_INSERT_TAIL(&list, p, pointers);
+      quantum = quantum_length;
+    }
+    
+    t++;
+  }
+
+  // calculate the total waiting/response time
+  for (u32 i = 0; i < size; i++) {
+    p = &data[i];
+    total_response_time += p->response_time;
+    total_waiting_time += p->waiting_time;
+  }
+
+
   /* End of "Your code here" */
 
   printf("Average waiting time: %.2f\n", (float)total_waiting_time / (float)size);
